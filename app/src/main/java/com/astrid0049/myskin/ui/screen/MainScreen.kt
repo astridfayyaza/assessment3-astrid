@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.astrid0049.myskin.model.Skincare
+import com.astrid0049.myskin.network.ApiStatus
 import com.astrid0049.myskin.network.SkincareApi
 import com.astrid0049.myskin.ui.theme.MySkinTheme
 
@@ -59,12 +61,42 @@ fun MainScreen(modifier: Modifier = Modifier) {
 fun ScreenContent(modifier: Modifier = Modifier) {
     val viewModel: MainViewModel = viewModel()
     val data by viewModel.data
+    val apiStatus by viewModel.status.collectAsState()
 
-    LazyVerticalGrid(
-        modifier = modifier.fillMaxSize().padding(4.dp),
-        columns = GridCells.Fixed(2),
+    androidx.compose.foundation.layout.Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
-        items(data) { ListItem(skincare = it) }
+        when (apiStatus) {
+            ApiStatus.LOADING -> {
+                androidx.compose.material3.CircularProgressIndicator()
+            }
+            ApiStatus.FAILED -> {
+                androidx.compose.foundation.layout.Column(
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                ) {
+                    Text(text = "Failed to synchronize routing pipeline.", color = Color.Red)
+                    androidx.compose.material3.Button(
+                        onClick = { viewModel.retrieveData("") },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text("Retry")
+                    }
+                }
+            }
+            ApiStatus.SUCCESS -> {
+                if (data.isEmpty()) {
+                    Text(text = "No skincare data available.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    LazyVerticalGrid(
+                        modifier = Modifier.fillMaxSize().padding(4.dp),
+                        columns = GridCells.Fixed(2),
+                    ) {
+                        items(data) { ListItem(skincare = it) }
+                    }
+                }
+            }
+        }
     }
 }
 
