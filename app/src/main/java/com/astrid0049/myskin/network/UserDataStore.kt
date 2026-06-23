@@ -3,6 +3,7 @@ package com.astrid0049.myskin.network
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -17,6 +18,16 @@ class UserDataStore(private val context: Context) {
         val USER_NAME = stringPreferencesKey("user_name")
         val USER_EMAIL = stringPreferencesKey("user_email")
         val USER_PHOTO = stringPreferencesKey("user_photo")
+        val IS_LOGGED_IN = booleanPreferencesKey("is_logged_in")
+        val AUTH_TOKEN = stringPreferencesKey("auth_token")
+    }
+
+    val isLoggedInFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[IS_LOGGED_IN] == true
+    }
+
+    val tokenFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[AUTH_TOKEN] ?: "anonymous"
     }
 
     val userFlow: Flow<User> = context.dataStore.data.map { prefs ->
@@ -27,11 +38,19 @@ class UserDataStore(private val context: Context) {
         )
     }
 
-    suspend fun saveData(user: User) {
+    suspend fun loginUser(user: User, token: String) {
         context.dataStore.edit { prefs ->
             prefs[USER_NAME] = user.name
             prefs[USER_EMAIL] = user.email
             prefs[USER_PHOTO] = user.photoUrl
+            prefs[IS_LOGGED_IN] = true
+            prefs[AUTH_TOKEN] = token
+        }
+    }
+
+    suspend fun logoutUser() {
+        context.dataStore.edit { prefs ->
+            prefs.clear()
         }
     }
 }
