@@ -1,8 +1,12 @@
 package com.astrid0049.myskin.ui.screen
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.astrid0049.myskin.database.SkincareDao
@@ -11,15 +15,18 @@ import com.astrid0049.myskin.model.User
 import com.astrid0049.myskin.network.ApiStatus
 import com.astrid0049.myskin.network.SkincareApi
 import com.astrid0049.myskin.network.UserDataStore
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
+import java.util.UUID
 
 class MainViewModel : ViewModel() {
     var data = mutableStateOf(emptyList<Skincare>())
@@ -59,18 +66,52 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun simulateLogin() {
+    fun loginGoogle(context: Context) {
         viewModelScope.launch {
-            val mockUser = User(
-                name = "Astrid Dev",
-                email = "astrid@myskin.com",
-                photoUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb"
-            )
-            userDataStore.loginUser(mockUser, "bearer_token_abc123")
+            try {
+                val credentialManager = CredentialManager.create(context)
+                
+                // Generate a nonce for security
+                val rawNonce = UUID.randomUUID().toString()
+                val bytes = rawNonce.toByteArray()
+                val md = MessageDigest.getInstance("SHA-256")
+                val digest = md.digest(bytes)
+                val hashedNonce = digest.fold("") { str, it -> str + "%02x".format(it) }
+
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId("1094089185796-n0nmod730ro2k1ja24csr167e5f3c0hi.apps.googleusercontent.com")
+                    .setNonce(hashedNonce)
+                    .build()
+
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result = credentialManager.getCredential(context = context, request = request)
+                val credential = result.credential
+
+                if (credential is GoogleIdTokenCredential) {
+                    val user = User(
+                        name = credential.displayName ?: "User",
+                        email = credential.id,
+                        photoUrl = credential.profilePictureUri?.toString() ?: ""
+                    )
+                    // Token can be credential.idToken (the JWT)
+                    userDataStore.loginUser(user, credential.idToken)
+                    Log.d("MainViewModel", "Google Login Success: ${user.email}")
+                }
+            } catch (e: GetCredentialException) {
+                Log.e("MainViewModel", "Credential Error: ${e.message}")
+                errorMessage.value = "Login failed: ${e.message}"
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Login Error: ${e.message}")
+                errorMessage.value = "An unexpected error occurred"
+            }
         }
     }
 
-    fun simulateLogout() {
+    fun logout() {
         viewModelScope.launch {
             userDataStore.logoutUser()
         }

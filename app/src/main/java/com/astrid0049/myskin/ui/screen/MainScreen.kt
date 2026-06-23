@@ -106,8 +106,8 @@ fun MainScreen(
                     ProfileMenu(
                         user = viewModel.currentUser.value,
                         isLoggedIn = viewModel.isLoggedIn.value,
-                        onLogin = { viewModel.simulateLogin() },
-                        onLogout = { viewModel.simulateLogout() }
+                        onLogin = { viewModel.loginGoogle(context) },
+                        onLogout = { viewModel.logout() }
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
