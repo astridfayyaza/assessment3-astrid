@@ -10,7 +10,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.*
 
-private const val BASE_URL = "https://your-nextjs-api-project.vercel.app/"
+private const val BASE_URL = "https://myskin-rest-api.vercel.app/"
 
 private val moshi = Moshi.Builder()
     .add(KotlinJsonAdapterFactory())

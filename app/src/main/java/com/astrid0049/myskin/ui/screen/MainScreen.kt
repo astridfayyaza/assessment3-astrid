@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -20,6 +24,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +44,24 @@ import com.astrid0049.myskin.model.Skincare
 import com.astrid0049.myskin.network.ApiStatus
 import com.astrid0049.myskin.network.SkincareApi
 import com.astrid0049.myskin.ui.theme.MySkinTheme
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +70,8 @@ fun MainScreen(
     dao: SkincareDao,
     modifier: Modifier = Modifier
 ) {
+    var showDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -56,6 +83,11 @@ fun MainScreen(
                     titleContentColor = MaterialTheme.colorScheme.primary,
                 )
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Skincare")
+            }
         }
     ) { innerPadding ->
         ScreenContent(
@@ -63,7 +95,109 @@ fun MainScreen(
             dao = dao,
             modifier = Modifier.padding(innerPadding)
         )
+
+        if (showDialog) {
+            AddSkincareDialog(
+                onDismiss = { showDialog = false },
+                onConfirm = { nama, brand, bitmap ->
+                    viewModel.postNewData(nama, brand, bitmap, dao)
+                    showDialog = false
+                }
+            )
+        }
     }
+}
+
+@Composable
+fun AddSkincareDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, Bitmap) -> Unit
+) {
+    var nama by remember { mutableStateOf("") }
+    var brand by remember { mutableStateOf("") }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val context = LocalContext.current
+
+    val cropLauncher = rememberLauncherForActivityResult(CropImageContract()) { result ->
+        if (result.isSuccessful) {
+            val uri = result.uriContent
+            if (uri != null) {
+                bitmap = if (Build.VERSION.SDK_INT < 28) {
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                } else {
+                    val source = ImageDecoder.createSource(context.contentResolver, uri)
+                    ImageDecoder.decodeBitmap(source)
+                }
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add New Skincare") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = nama,
+                    onValueChange = { nama = it },
+                    label = { Text("Skincare Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = brand,
+                    onValueChange = { brand = it },
+                    label = { Text("Brand") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Button(
+                    onClick = {
+                        val options = CropImageContractOptions(
+                            uri = null,
+                            cropImageOptions = CropImageOptions(
+                                guidelines = CropImageView.Guidelines.ON,
+                                fixAspectRatio = true,
+                                aspectRatioX = 1,
+                                aspectRatioY = 1
+                            )
+                        )
+                        cropLauncher.launch(options)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (bitmap == null) "Pick & Crop Photo" else "Change Photo")
+                }
+                
+                bitmap?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AsyncImage(
+                        model = it,
+                        contentDescription = "Selected Image",
+                        modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (nama.isNotBlank() && brand.isNotBlank() && bitmap != null) {
+                        onConfirm(nama, brand, bitmap!!)
+                    }
+                },
+                enabled = nama.isNotBlank() && brand.isNotBlank() && bitmap != null
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable

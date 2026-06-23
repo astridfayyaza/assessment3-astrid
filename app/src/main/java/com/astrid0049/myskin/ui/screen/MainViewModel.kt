@@ -7,8 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.astrid0049.myskin.database.SkincareDao
 import com.astrid0049.myskin.model.Skincare
+import com.astrid0049.myskin.model.User
 import com.astrid0049.myskin.network.ApiStatus
 import com.astrid0049.myskin.network.SkincareApi
+import com.astrid0049.myskin.network.UserDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -27,6 +29,63 @@ class MainViewModel : ViewModel() {
 
     var errorMessage = mutableStateOf<String?>(null)
         private set
+
+    private lateinit var userDataStore: UserDataStore
+
+    var currentUser = mutableStateOf<User?>(null)
+
+    var isLoggedIn = mutableStateOf(false)
+
+    private var currentToken: String = "anonymous"
+
+    fun initAuth(dataStore: UserDataStore, dao: SkincareDao) {
+        this.userDataStore = dataStore
+        viewModelScope.launch {
+            userDataStore.isLoggedInFlow.collect { loggedIn ->
+                isLoggedIn.value = loggedIn
+            }
+        }
+        viewModelScope.launch {
+            userDataStore.userFlow.collect { user ->
+                currentUser.value = if (isLoggedIn.value) user else null
+            }
+        }
+        viewModelScope.launch {
+            userDataStore.tokenFlow.collect { token ->
+                currentToken = token
+                retrieveData(currentToken, dao)
+            }
+        }
+    }
+
+    fun simulateLogin() {
+        viewModelScope.launch {
+            val mockUser = User(
+                name = "Astrid Dev",
+                email = "astrid@myskin.com",
+                photoUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb"
+            )
+            userDataStore.loginUser(mockUser, "bearer_token_abc123")
+        }
+    }
+
+    fun simulateLogout() {
+        viewModelScope.launch {
+            userDataStore.logoutUser()
+        }
+    }
+
+    fun refreshData(dao: SkincareDao) {
+        retrieveData(currentToken, dao)
+    }
+
+    fun postNewData(nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
+        saveData(currentToken, nama, brand, bitmap, dao)
+    }
+
+    fun executeDelete(id: String, dao: SkincareDao) {
+        deleteData(currentToken, id, dao)
+    }
 
     fun retrieveData(token: String, dao: SkincareDao) {
         viewModelScope.launch {
