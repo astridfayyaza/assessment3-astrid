@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 
@@ -96,6 +97,7 @@ class MainViewModel : ViewModel() {
                     SkincareApi.service.getSkincare(activeToken)
                 }
 
+                Log.d("MainViewModel", "Fetch Success: received ${networkData.size} items")
                 data.value = networkData
                 status.value = ApiStatus.SUCCESS
 
@@ -131,23 +133,51 @@ class MainViewModel : ViewModel() {
     fun saveData(token: String, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
         viewModelScope.launch {
             try {
+                status.value = ApiStatus.LOADING
                 val activeToken = token.ifEmpty { "anonymous" }
+
+                val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+                    bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                } else {
+                    bitmap
+                }
+
+                val maxSize = 600
+                val ratio = safeBitmap.width.toFloat() / safeBitmap.height.toFloat()
+                val (finalWidth, finalHeight) = if (safeBitmap.width > safeBitmap.height) {
+                    maxSize to (maxSize / ratio).toInt()
+                } else {
+                    (maxSize * ratio).toInt() to maxSize
+                }
+
+                val scaledBitmap = Bitmap.createScaledBitmap(safeBitmap, finalWidth, finalHeight, true)
+                val stream = ByteArrayOutputStream()
+                scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 50, stream)
+                val byteArray = stream.toByteArray()
+
+                val imageBody = byteArray.toRequestBody("image/jpeg".toMediaTypeOrNull())
+                val imagePart = MultipartBody.Part.createFormData("image", "skincare.jpg", imageBody)
+
                 val result = withContext(Dispatchers.IO) {
                     SkincareApi.service.postSkincare(
-                        activeToken,
-                        nama.toRequestBody("text/plain".toMediaTypeOrNull()),
-                        brand.toRequestBody("text/plain".toMediaTypeOrNull()),
-                        bitmap.toMultipartBody()
+                        token = activeToken,
+                        nama = nama,
+                        brand = brand,
+                        image = imagePart
                     )
                 }
 
-                if (result.status == "success") {
+                if (result.status.equals("success", ignoreCase = true)) {
+                    errorMessage.value = "Skincare saved successfully!"
                     retrieveData(activeToken, dao)
                 } else {
-                    errorMessage.value = result.message ?: "Unknown error"
+                    status.value = ApiStatus.SUCCESS
+                    errorMessage.value = result.message ?: "Server error"
                 }
             } catch (e: Exception) {
-                errorMessage.value = "Error saving data: ${e.message}"
+                Log.e("MainViewModel", "Save Failure: ${e.message}")
+                status.value = ApiStatus.FAILED
+                errorMessage.value = "Error: ${e.message}"
             }
         }
     }
@@ -160,7 +190,8 @@ class MainViewModel : ViewModel() {
                     SkincareApi.service.deleteSkincare(activeToken, id)
                 }
 
-                if (result.status == "success") {
+                if (result.status.equals("success", ignoreCase = true)) {
+                    errorMessage.value = "Item deleted"
                     retrieveData(activeToken, dao)
                 } else {
                     errorMessage.value = result.message ?: "Unknown error"
@@ -169,14 +200,6 @@ class MainViewModel : ViewModel() {
                 errorMessage.value = "Error deleting data: ${e.message}"
             }
         }
-    }
-
-    private fun Bitmap.toMultipartBody(): MultipartBody.Part {
-        val stream = ByteArrayOutputStream()
-        compress(Bitmap.CompressFormat.JPEG, 80, stream)
-        val byteArray = stream.toByteArray()
-        val requestBody = byteArray.toRequestBody("image/jpg".toMediaTypeOrNull(), 0, byteArray.size)
-        return MultipartBody.Part.createFormData("image", "skincare.jpg", requestBody)
     }
 
     fun clearMessage() { errorMessage.value = null }

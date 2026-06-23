@@ -31,8 +31,8 @@ interface SkincareApiService {
     @POST("api/skincare")
     suspend fun postSkincare(
         @Header("Authorization") token: String,
-        @Part("nama") nama: RequestBody,
-        @Part("brand") brand: RequestBody,
+        @Part("nama") nama: String,
+        @Part("brand") brand: String,
         @Part image: MultipartBody.Part
     ): OpStatus
 

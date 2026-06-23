@@ -15,15 +15,18 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +55,8 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -60,6 +65,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import com.astrid0049.myskin.ui.component.ProfileMenu
 import com.canhub.cropper.CropImageContract
 import com.canhub.cropper.CropImageContractOptions
@@ -74,14 +81,28 @@ fun MainScreen(
     modifier: Modifier = Modifier
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val errorMessage by viewModel.errorMessage
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearMessage()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(text = "MySkin")
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.refreshData(dao) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
                     ProfileMenu(
                         user = viewModel.currentUser.value,
                         isLoggedIn = viewModel.isLoggedIn.value,
@@ -134,13 +155,47 @@ fun AddSkincareDialog(
         if (result.isSuccessful) {
             val uri = result.uriContent
             if (uri != null) {
-                bitmap = if (Build.VERSION.SDK_INT < 28) {
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                } else {
-                    val source = ImageDecoder.createSource(context.contentResolver, uri)
-                    ImageDecoder.decodeBitmap(source)
+                bitmap = try {
+                    if (Build.VERSION.SDK_INT < 28) {
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    } else {
+                        val source = ImageDecoder.createSource(context.contentResolver, uri)
+                        ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainScreen", "Error decoding bitmap: ${e.message}")
+                    null
                 }
             }
+        } else {
+            Log.e("MainScreen", "Crop Error: ${result.error?.message}")
+        }
+    }
+
+    val startCrop = {
+        val options = CropImageContractOptions(
+            uri = null,
+            cropImageOptions = CropImageOptions(
+                guidelines = CropImageView.Guidelines.ON,
+                fixAspectRatio = true,
+                aspectRatioX = 1,
+                aspectRatioY = 1,
+                imageSourceIncludeCamera = true,
+                imageSourceIncludeGallery = true
+            )
+        )
+        cropLauncher.launch(options)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startCrop()
+        } else {
+            Log.e("MainScreen", "Camera permission denied")
         }
     }
 
@@ -166,16 +221,15 @@ fun AddSkincareDialog(
                 
                 Button(
                     onClick = {
-                        val options = CropImageContractOptions(
-                            uri = null,
-                            cropImageOptions = CropImageOptions(
-                                guidelines = CropImageView.Guidelines.ON,
-                                fixAspectRatio = true,
-                                aspectRatioX = 1,
-                                aspectRatioY = 1
-                            )
+                        val permissionCheck = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.CAMERA
                         )
-                        cropLauncher.launch(options)
+                        if (permissionCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            startCrop()
+                        } else {
+                            permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -251,7 +305,9 @@ fun ScreenContent(
                         modifier = Modifier.fillMaxSize().padding(4.dp),
                         columns = GridCells.Fixed(2),
                     ) {
-                        items(data) { ListItem(skincare = it, onDelete = onDelete) }
+                        items(data) { skincare ->
+                            ListItem(skincare = skincare, onDelete = onDelete)
+                        }
                     }
                 }
             }
