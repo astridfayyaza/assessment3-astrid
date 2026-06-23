@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.astrid0049.myskin.database.SkincareDao
 import com.astrid0049.myskin.model.Skincare
 import com.astrid0049.myskin.network.ApiStatus
 import com.astrid0049.myskin.network.SkincareApi
@@ -39,7 +40,11 @@ import com.astrid0049.myskin.ui.theme.MySkinTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
+fun MainScreen(
+    viewModel: MainViewModel,
+    dao: SkincareDao,
+    modifier: Modifier = Modifier
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,31 +58,38 @@ fun MainScreen(modifier: Modifier = Modifier) {
             )
         }
     ) { innerPadding ->
-        ScreenContent(Modifier.padding(innerPadding))
+        ScreenContent(
+            viewModel = viewModel,
+            dao = dao,
+            modifier = Modifier.padding(innerPadding)
+        )
     }
 }
 
 @Composable
-fun ScreenContent(modifier: Modifier = Modifier) {
-    val viewModel: MainViewModel = viewModel()
+fun ScreenContent(
+    viewModel: MainViewModel,
+    dao: SkincareDao,
+    modifier: Modifier = Modifier
+) {
     val data by viewModel.data
     val apiStatus by viewModel.status.collectAsState()
 
-    androidx.compose.foundation.layout.Box(
+    Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = androidx.compose.ui.Alignment.Center
+        contentAlignment = Alignment.Center
     ) {
         when (apiStatus) {
             ApiStatus.LOADING -> {
                 androidx.compose.material3.CircularProgressIndicator()
             }
             ApiStatus.FAILED -> {
-                androidx.compose.foundation.layout.Column(
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(text = "Failed to synchronize routing pipeline.", color = Color.Red)
                     androidx.compose.material3.Button(
-                        onClick = { viewModel.retrieveData("") },
+                        onClick = { viewModel.retrieveData("", dao) },
                         modifier = Modifier.padding(top = 8.dp)
                     ) {
                         Text("Retry")
@@ -100,23 +112,30 @@ fun ScreenContent(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListItem(skincare: Skincare) {
     Box(
-        modifier = Modifier.padding(4.dp).border(1.dp, Color.Gray),
+        modifier = Modifier
+            .padding(4.dp)
+            .border(1.dp, Color.Gray),
         contentAlignment = Alignment.BottomCenter
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(SkincareApi.getSkincareUrl(skincare.imageId))
-                .crossfade(enable = true)
+                .crossfade(true)
                 .build(),
             contentDescription = skincare.nama,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().padding(4.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp)
         )
         Column(
-            modifier = Modifier.fillMaxWidth().padding(4.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp)
                 .background(Color(red = 0f, green = 0f, blue = 0f, alpha = 0.5f))
                 .padding(4.dp)
         ) {
@@ -148,6 +167,32 @@ fun ListItem(skincare: Skincare) {
 @Composable
 fun MainScreenPreview() {
     MySkinTheme {
-        MainScreen()
+        val mockItems = listOf(
+            Skincare(id = "1", nama = "Hydrating Cleanser", brand = "CeraVe", imageId = "sample1", mine = 1),
+            Skincare(id = "2", nama = "Retinol Serum", brand = "The Ordinary", imageId = "sample2", mine = 0)
+        )
+
+        Scaffold(
+            topBar = {
+                @OptIn(ExperimentalMaterial3Api::class)
+                TopAppBar(
+                    title = { Text(text = "MySkin") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.primary,
+                    )
+                )
+            }
+        ) { innerPadding ->
+            LazyVerticalGrid(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(4.dp),
+                columns = GridCells.Fixed(2),
+            ) {
+                items(mockItems) { ListItem(skincare = it) }
+            }
+        }
     }
 }

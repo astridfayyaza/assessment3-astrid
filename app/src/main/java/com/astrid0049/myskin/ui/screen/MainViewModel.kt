@@ -5,12 +5,14 @@ import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.astrid0049.myskin.database.SkincareDao
 import com.astrid0049.myskin.model.Skincare
 import com.astrid0049.myskin.network.ApiStatus
 import com.astrid0049.myskin.network.SkincareApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -26,35 +28,64 @@ class MainViewModel : ViewModel() {
     var errorMessage = mutableStateOf<String?>(null)
         private set
 
-    fun retrieveData(token: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun retrieveData(token: String, dao: SkincareDao) {
+        viewModelScope.launch {
             status.value = ApiStatus.LOADING
             try {
                 val activeToken = token.ifEmpty { "anonymous" }
-                data.value = SkincareApi.service.getSkincare(activeToken)
+                val networkData = withContext(Dispatchers.IO) {
+                    SkincareApi.service.getSkincare(activeToken)
+                }
+
+                data.value = networkData
                 status.value = ApiStatus.SUCCESS
+
+                // Update cache
+                withContext(Dispatchers.IO) {
+                    try {
+                        dao.clearAll()
+                        dao.insertAll(networkData)
+                    } catch (e: Exception) {
+                        Log.e("MainViewModel", "Failed to update Room cache: ${e.message}")
+                    }
+                }
             } catch (e: Exception) {
-                Log.e("MainViewModel", "Fetch Failure: ${e.message}")
-                status.value = ApiStatus.FAILED
+                Log.e("MainViewModel", "Fetch Failure: ${e.message}. Attempting fallback.")
+                try {
+                    val fallbackData = withContext(Dispatchers.IO) {
+                        dao.getAllSkincare()
+                    }
+                    data.value = fallbackData
+                    if (fallbackData.isNotEmpty()) {
+                        status.value = ApiStatus.SUCCESS
+                    } else {
+                        status.value = ApiStatus.FAILED
+                    }
+                } catch (fallbackError: Exception) {
+                    Log.e("MainViewModel", "Fallback Failure: ${fallbackError.message}")
+                    status.value = ApiStatus.FAILED
+                }
             }
         }
     }
 
-    fun saveData(token: String, nama: String, brand: String, bitmap: Bitmap) {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun saveData(token: String, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
+        viewModelScope.launch {
             try {
                 val activeToken = token.ifEmpty { "anonymous" }
-                val result = SkincareApi.service.postSkincare(
-                    activeToken,
-                    nama.toRequestBody("text/plain".toMediaTypeOrNull()),
-                    brand.toRequestBody("text/plain".toMediaTypeOrNull()),
-                    bitmap.toMultipartBody()
-                )
+                val result = withContext(Dispatchers.IO) {
+                    SkincareApi.service.postSkincare(
+                        activeToken,
+                        nama.toRequestBody("text/plain".toMediaTypeOrNull()),
+                        brand.toRequestBody("text/plain".toMediaTypeOrNull()),
+                        bitmap.toMultipartBody()
+                    )
+                }
 
                 if (result.status == "success") {
-                    retrieveData(activeToken)
+                    retrieveData(activeToken, dao)
                 } else {
-                    throw Exception(result.message)
+                    errorMessage.value = result.message ?: "Unknown error"
                 }
             } catch (e: Exception) {
                 errorMessage.value = "Error saving data: ${e.message}"
@@ -62,16 +93,18 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun deleteData(token: String, id: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun deleteData(token: String, id: String, dao: SkincareDao) {
+        viewModelScope.launch {
             try {
                 val activeToken = token.ifEmpty { "anonymous" }
-                val result = SkincareApi.service.deleteSkincare(activeToken, id)
+                val result = withContext(Dispatchers.IO) {
+                    SkincareApi.service.deleteSkincare(activeToken, id)
+                }
 
                 if (result.status == "success") {
-                    retrieveData(activeToken)
+                    retrieveData(activeToken, dao)
                 } else {
-                    throw Exception(result.message)
+                    errorMessage.value = result.message ?: "Unknown error"
                 }
             } catch (e: Exception) {
                 errorMessage.value = "Error deleting data: ${e.message}"
