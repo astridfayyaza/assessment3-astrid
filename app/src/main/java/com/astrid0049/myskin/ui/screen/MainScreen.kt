@@ -1,8 +1,10 @@
 package com.astrid0049.myskin.ui.screen
 
 import android.content.res.Configuration
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,6 +104,7 @@ fun MainScreen(
         ScreenContent(
             viewModel = viewModel,
             dao = dao,
+            onDelete = { id -> viewModel.executeDelete(id, dao) },
             modifier = Modifier.padding(innerPadding)
         )
 
@@ -213,6 +216,7 @@ fun AddSkincareDialog(
 fun ScreenContent(
     viewModel: MainViewModel,
     dao: SkincareDao,
+    onDelete: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val data by viewModel.data
@@ -247,7 +251,7 @@ fun ScreenContent(
                         modifier = Modifier.fillMaxSize().padding(4.dp),
                         columns = GridCells.Fixed(2),
                     ) {
-                        items(data) { ListItem(skincare = it) }
+                        items(data) { ListItem(skincare = it, onDelete = onDelete) }
                     }
                 }
             }
@@ -255,13 +259,43 @@ fun ScreenContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ListItem(skincare: Skincare) {
+fun ListItem(
+    skincare: Skincare,
+    onDelete: (String) -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Skincare") },
+            text = { Text("Are you sure you want to delete '${skincare.nama}'?") },
+            confirmButton = {
+                Button(onClick = {
+                    onDelete(skincare.id)
+                    showDeleteConfirm = false
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .padding(4.dp)
-            .border(1.dp, Color.Gray),
+            .border(1.dp, Color.Gray)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { showDeleteConfirm = true }
+            ),
         contentAlignment = Alignment.BottomCenter
     ) {
         AsyncImage(
@@ -273,25 +307,17 @@ fun ListItem(skincare: Skincare) {
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
+                .height(180.dp)
                 .padding(4.dp)
         )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(4.dp)
                 .background(Color(red = 0f, green = 0f, blue = 0f, alpha = 0.5f))
                 .padding(4.dp)
         ) {
-            Text(
-                text = skincare.nama,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = skincare.brand,
-                fontSize = 14.sp,
-                color = Color.White
-            )
+            Text(text = skincare.nama, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(text = skincare.brand, fontSize = 14.sp, color = Color.White)
             if (skincare.mine == 1) {
                 Text(
                     text = "Mine",
@@ -334,7 +360,7 @@ fun MainScreenPreview() {
                     .padding(4.dp),
                 columns = GridCells.Fixed(2),
             ) {
-                items(mockItems) { ListItem(skincare = it) }
+                items(mockItems) { ListItem(skincare = it, onDelete = {}) }
             }
         }
     }
