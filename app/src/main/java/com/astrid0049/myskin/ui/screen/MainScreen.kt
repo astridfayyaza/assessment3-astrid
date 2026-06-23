@@ -58,6 +58,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
+import com.astrid0049.myskin.ui.component.ProfileMenu
 import com.canhub.cropper.CropImageContract
 import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageOptions
@@ -77,6 +78,14 @@ fun MainScreen(
             TopAppBar(
                 title = {
                     Text(text = "MySkin")
+                },
+                actions = {
+                    ProfileMenu(
+                        user = viewModel.currentUser.value,
+                        isLoggedIn = viewModel.isLoggedIn.value,
+                        onLogin = { viewModel.simulateLogin() },
+                        onLogout = { viewModel.simulateLogout() }
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,

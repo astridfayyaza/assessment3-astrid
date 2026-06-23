@@ -11,6 +11,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import com.astrid0049.myskin.database.SkincareDatabase
+import com.astrid0049.myskin.network.UserDataStore
 import com.astrid0049.myskin.ui.screen.MainScreen
 import com.astrid0049.myskin.ui.screen.MainViewModel
 import com.astrid0049.myskin.ui.theme.MySkinTheme
@@ -24,12 +25,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val database = SkincareDatabase.getDatabase(this)
+        val userDataStore = UserDataStore(this)
 
         setContent {
             MySkinTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     LaunchedEffect(Unit) {
-                        viewModel.retrieveData("", database.skincareDao())
+                        viewModel.initAuth(userDataStore, database.skincareDao())
                     }
 
                     MainScreen(
