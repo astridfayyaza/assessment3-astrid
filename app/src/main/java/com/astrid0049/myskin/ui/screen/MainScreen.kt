@@ -62,6 +62,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
@@ -312,8 +316,10 @@ fun ScreenContent(
                         }
                     } else {
                         LazyVerticalGrid(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                             columns = GridCells.Fixed(2),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(data) { skincare ->
                                 ListItem(skincare = skincare, onDelete = onDelete)
@@ -355,43 +361,46 @@ fun ListItem(
         )
     }
 
-    Box(
+    Card(
         modifier = Modifier
-            .padding(4.dp)
-            .border(1.dp, Color.Gray)
+            .fillMaxWidth()
             .combinedClickable(
                 onClick = {},
                 onLongClick = { showDeleteConfirm = true }
             ),
-        contentAlignment = Alignment.BottomCenter
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(SkincareApi.getSkincareUrl(skincare.imageId))
-                .crossfade(true)
-                .build(),
-            contentDescription = skincare.nama,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .padding(4.dp)
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(red = 0f, green = 0f, blue = 0f, alpha = 0.5f))
-                .padding(4.dp)
-        ) {
-            Text(text = skincare.nama, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(text = skincare.brand, fontSize = 14.sp, color = Color.White)
-            if (skincare.mine == 1) {
+        Box(contentAlignment = Alignment.BottomCenter) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(SkincareApi.getSkincareUrl(skincare.imageId))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = skincare.nama,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(red = 0f, green = 0f, blue = 0f, alpha = 0.6f))
+                    .padding(8.dp)
+            ) {
                 Text(
-                    text = "Mine",
-                    fontSize = 11.sp,
+                    text = skincare.nama,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Green,
-                    modifier = Modifier.padding(top = 2.dp)
+                    color = Color.White,
+                    maxLines = 1,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = skincare.brand,
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.8f),
+                    maxLines = 1
                 )
             }
         }
