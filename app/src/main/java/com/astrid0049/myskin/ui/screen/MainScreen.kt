@@ -3,6 +3,7 @@ package com.astrid0049.myskin.ui.screen
 import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -122,8 +123,10 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Skincare")
+            if (viewModel.isLoggedIn.value) {
+                FloatingActionButton(onClick = { showAddDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Skincare")
+                }
             }
         }
     ) { innerPadding ->
@@ -469,13 +472,32 @@ fun ScreenContent(
             }
             ApiStatus.SUCCESS -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    viewModel.currentUser.value?.let { user ->
-                        Text(
-                            text = "Welcome, ${user.name}!",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                    if (viewModel.isLoggedIn.value) {
+                        viewModel.currentUser.value?.let { user ->
+                            Text(
+                                text = "Welcome, ${user.name}!",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Please sign in to manage your skincare collection.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
+
                     if (data.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(text = "No skincare data available.", style = MaterialTheme.typography.bodyMedium)
@@ -491,7 +513,8 @@ fun ScreenContent(
                                 ListItem(
                                     skincare = skincare,
                                     onDelete = onDelete,
-                                    onEdit = onEdit
+                                    onEdit = onEdit,
+                                    isLoggedIn = viewModel.isLoggedIn.value
                                 )
                             }
                         }
@@ -507,11 +530,12 @@ fun ScreenContent(
 fun ListItem(
     skincare: Skincare,
     onDelete: (String) -> Unit,
-    onEdit: (Skincare) -> Unit
+    onEdit: (Skincare) -> Unit,
+    isLoggedIn: Boolean
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    if (showDeleteConfirm) {
+    if (showDeleteConfirm && isLoggedIn) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete Skincare") },
@@ -536,8 +560,8 @@ fun ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = { onEdit(skincare) },
-                onLongClick = { showDeleteConfirm = true }
+                onClick = { if (isLoggedIn) onEdit(skincare) },
+                onLongClick = { if (isLoggedIn) showDeleteConfirm = true }
             ),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -577,12 +601,14 @@ fun ListItem(
                         maxLines = 1
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (isLoggedIn) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }
@@ -617,7 +643,7 @@ fun MainScreenPreview() {
                     .padding(4.dp),
                 columns = GridCells.Fixed(2),
             ) {
-                items(mockItems) { ListItem(skincare = it, onDelete = {}, onEdit = {}) }
+                items(mockItems) { ListItem(skincare = it, onDelete = {}, onEdit = {}, isLoggedIn = true) }
             }
         }
     }
