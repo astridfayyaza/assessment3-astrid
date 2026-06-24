@@ -298,15 +298,26 @@ fun ScreenContent(
                 }
             }
             ApiStatus.SUCCESS -> {
-                if (data.isEmpty()) {
-                    Text(text = "No skincare data available.", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    LazyVerticalGrid(
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
-                        columns = GridCells.Fixed(2),
-                    ) {
-                        items(data) { skincare ->
-                            ListItem(skincare = skincare, onDelete = onDelete)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    viewModel.currentUser.value?.let { user ->
+                        Text(
+                            text = "Welcome, ${user.name}!",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                    if (data.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(text = "No skincare data available.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                            columns = GridCells.Fixed(2),
+                        ) {
+                            items(data) { skincare ->
+                                ListItem(skincare = skincare, onDelete = onDelete)
+                            }
                         }
                     }
                 }

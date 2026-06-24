@@ -46,6 +46,10 @@ class MainViewModel : ViewModel() {
 
     private var currentToken: String = "anonymous"
 
+    private fun getAuthHeader(token: String): String {
+        return if (token == "anonymous" || token.isEmpty()) "anonymous" else "Bearer $token"
+    }
+
     fun initAuth(dataStore: UserDataStore, dao: SkincareDao) {
         this.userDataStore = dataStore
         viewModelScope.launch {
@@ -133,9 +137,9 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             status.value = ApiStatus.LOADING
             try {
-                val activeToken = token.ifEmpty { "anonymous" }
+                val authHeader = getAuthHeader(token)
                 val networkData = withContext(Dispatchers.IO) {
-                    SkincareApi.service.getSkincare(activeToken)
+                    SkincareApi.service.getSkincare(authHeader)
                 }
 
                 Log.d("MainViewModel", "Fetch Success: received ${networkData.size} items")
@@ -175,7 +179,7 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 status.value = ApiStatus.LOADING
-                val activeToken = token.ifEmpty { "anonymous" }
+                val authHeader = getAuthHeader(token)
 
                 val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
                     bitmap.copy(Bitmap.Config.ARGB_8888, false)
@@ -201,7 +205,7 @@ class MainViewModel : ViewModel() {
 
                 val result = withContext(Dispatchers.IO) {
                     SkincareApi.service.postSkincare(
-                        token = activeToken,
+                        token = authHeader,
                         nama = nama,
                         brand = brand,
                         image = imagePart
@@ -210,7 +214,7 @@ class MainViewModel : ViewModel() {
 
                 if (result.status.equals("success", ignoreCase = true)) {
                     errorMessage.value = "Skincare saved successfully!"
-                    retrieveData(activeToken, dao)
+                    retrieveData(token, dao)
                 } else {
                     status.value = ApiStatus.SUCCESS
                     errorMessage.value = result.message ?: "Server error"
@@ -226,14 +230,14 @@ class MainViewModel : ViewModel() {
     fun deleteData(token: String, id: String, dao: SkincareDao) {
         viewModelScope.launch {
             try {
-                val activeToken = token.ifEmpty { "anonymous" }
+                val authHeader = getAuthHeader(token)
                 val result = withContext(Dispatchers.IO) {
-                    SkincareApi.service.deleteSkincare(activeToken, id)
+                    SkincareApi.service.deleteSkincare(authHeader, id)
                 }
 
                 if (result.status.equals("success", ignoreCase = true)) {
                     errorMessage.value = "Item deleted"
-                    retrieveData(activeToken, dao)
+                    retrieveData(token, dao)
                 } else {
                     errorMessage.value = result.message ?: "Unknown error"
                 }
