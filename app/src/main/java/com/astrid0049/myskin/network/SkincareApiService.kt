@@ -36,6 +36,16 @@ interface SkincareApiService {
         @Part image: MultipartBody.Part
     ): OpStatus
 
+    @Multipart
+    @PUT("api/skincare")
+    suspend fun putSkincare(
+        @Header("Authorization") token: String,
+        @Query("id") id: String,
+        @Part("nama") nama: String,
+        @Part("brand") brand: String,
+        @Part image: MultipartBody.Part? = null
+    ): OpStatus
+
     @DELETE("api/skincare")
     suspend fun deleteSkincare(
         @Header("Authorization") token: String,

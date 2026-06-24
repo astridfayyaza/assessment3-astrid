@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
@@ -86,7 +87,8 @@ fun MainScreen(
     dao: SkincareDao,
     modifier: Modifier = Modifier
 ) {
-    var showDialog by remember { mutableStateOf(false) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingSkincare by remember { mutableStateOf<Skincare?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val errorMessage by viewModel.errorMessage
@@ -123,7 +125,7 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showDialog = true }) {
+            FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Skincare")
             }
         }
@@ -132,15 +134,27 @@ fun MainScreen(
             viewModel = viewModel,
             dao = dao,
             onDelete = { id -> viewModel.executeDelete(id, dao) },
+            onEdit = { skincare -> editingSkincare = skincare },
             modifier = Modifier.padding(innerPadding)
         )
 
-        if (showDialog) {
+        if (showAddDialog) {
             AddSkincareDialog(
-                onDismiss = { showDialog = false },
+                onDismiss = { showAddDialog = false },
                 onConfirm = { nama, brand, bitmap ->
                     viewModel.postNewData(nama, brand, bitmap, dao)
-                    showDialog = false
+                    showAddDialog = false
+                }
+            )
+        }
+
+        editingSkincare?.let { skincare ->
+            EditSkincareDialog(
+                skincare = skincare,
+                onDismiss = { editingSkincare = null },
+                onConfirm = { nama, brand, bitmap ->
+                    viewModel.updateExistingData(skincare.id, nama, brand, bitmap, dao)
+                    editingSkincare = null
                 }
             )
         }
@@ -210,21 +224,6 @@ fun AddSkincareDialog(
         title = { Text("Add New Skincare") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = nama,
-                    onValueChange = { nama = it },
-                    label = { Text("Skincare Name") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = brand,
-                    onValueChange = { brand = it },
-                    label = { Text("Brand") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                
                 Button(
                     onClick = {
                         val permissionCheck = androidx.core.content.ContextCompat.checkSelfPermission(
@@ -250,6 +249,22 @@ fun AddSkincareDialog(
                         modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = nama,
+                    onValueChange = { nama = it },
+                    label = { Text("Skincare Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = brand,
+                    onValueChange = { brand = it },
+                    label = { Text("Brand") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
@@ -273,10 +288,139 @@ fun AddSkincareDialog(
 }
 
 @Composable
+fun EditSkincareDialog(
+    skincare: Skincare,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, Bitmap?) -> Unit
+) {
+    var nama by remember { mutableStateOf(skincare.nama) }
+    var brand by remember { mutableStateOf(skincare.brand) }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val context = LocalContext.current
+
+    val cropLauncher = rememberLauncherForActivityResult(CropImageContract()) { result ->
+        if (result.isSuccessful) {
+            val uri = result.uriContent
+            if (uri != null) {
+                bitmap = try {
+                    if (Build.VERSION.SDK_INT < 28) {
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    } else {
+                        val source = ImageDecoder.createSource(context.contentResolver, uri)
+                        ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainScreen", "Error decoding bitmap: ${e.message}")
+                    null
+                }
+            }
+        }
+    }
+
+    val startCrop = {
+        val options = CropImageContractOptions(
+            uri = null,
+            cropImageOptions = CropImageOptions(
+                guidelines = CropImageView.Guidelines.ON,
+                fixAspectRatio = true,
+                aspectRatioX = 1,
+                aspectRatioY = 1,
+                imageSourceIncludeCamera = true,
+                imageSourceIncludeGallery = true
+            )
+        )
+        cropLauncher.launch(options)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) startCrop()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Skincare") },
+        text = {
+            Column {
+                Button(
+                    onClick = {
+                        val permissionCheck = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.CAMERA
+                        )
+                        if (permissionCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            startCrop()
+                        } else {
+                            permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (bitmap == null) "Change Photo (Optional)" else "Photo Selected")
+                }
+                
+                if (bitmap != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AsyncImage(
+                        model = bitmap,
+                        contentDescription = "New Image",
+                        modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AsyncImage(
+                        model = SkincareApi.getSkincareUrl(skincare.imageId),
+                        contentDescription = "Current Image",
+                        modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = nama,
+                    onValueChange = { nama = it },
+                    label = { Text("Skincare Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = brand,
+                    onValueChange = { brand = it },
+                    label = { Text("Brand") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (nama.isNotBlank() && brand.isNotBlank()) {
+                        onConfirm(nama, brand, bitmap)
+                    }
+                },
+                enabled = nama.isNotBlank() && brand.isNotBlank()
+            ) {
+                Text("Update")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
 fun ScreenContent(
     viewModel: MainViewModel,
     dao: SkincareDao,
     onDelete: (String) -> Unit,
+    onEdit: (Skincare) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val data by viewModel.data
@@ -347,7 +491,11 @@ fun ScreenContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(data) { skincare ->
-                                ListItem(skincare = skincare, onDelete = onDelete)
+                                ListItem(
+                                    skincare = skincare,
+                                    onDelete = onDelete,
+                                    onEdit = onEdit
+                                )
                             }
                         }
                     }
@@ -361,7 +509,8 @@ fun ScreenContent(
 @Composable
 fun ListItem(
     skincare: Skincare,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onEdit: (Skincare) -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -369,7 +518,7 @@ fun ListItem(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete Skincare") },
-            text = { Text("Are you sure you want to delete '${skincare.nama}'?") },
+            text = { Text("Are you sure you want to delete ${skincare.nama}?") },
             confirmButton = {
                 Button(onClick = {
                     onDelete(skincare.id)
@@ -390,7 +539,7 @@ fun ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = {},
+                onClick = { onEdit(skincare) },
                 onLongClick = { showDeleteConfirm = true }
             ),
         shape = RoundedCornerShape(12.dp),
@@ -408,24 +557,34 @@ fun ListItem(
                     .fillMaxWidth()
                     .height(180.dp)
             )
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(red = 0f, green = 0f, blue = 0f, alpha = 0.6f))
-                    .padding(8.dp)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = skincare.nama,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = skincare.brand,
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.8f),
-                    maxLines = 1
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = skincare.nama.replace("\"", ""),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = skincare.brand.replace("\"", ""),
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 1
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -461,7 +620,7 @@ fun MainScreenPreview() {
                     .padding(4.dp),
                 columns = GridCells.Fixed(2),
             ) {
-                items(mockItems) { ListItem(skincare = it, onDelete = {}) }
+                items(mockItems) { ListItem(skincare = it, onDelete = {}, onEdit = {}) }
             }
         }
     }
