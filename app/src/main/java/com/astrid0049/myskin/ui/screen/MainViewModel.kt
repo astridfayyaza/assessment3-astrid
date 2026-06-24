@@ -178,7 +178,7 @@ class MainViewModel : ViewModel() {
     fun saveData(token: String, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
         viewModelScope.launch {
             try {
-                status.value = ApiStatus.SUCCESS
+                status.value = ApiStatus.LOADING
                 val authHeader = getAuthHeader(token)
 
                 val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
@@ -220,6 +220,7 @@ class MainViewModel : ViewModel() {
                 retrieveData(token, dao)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Save Result: ${e.message}")
+                errorMessage.value = "Save failed: check your connection"
                 retrieveData(token, dao)
             }
         }
@@ -228,6 +229,7 @@ class MainViewModel : ViewModel() {
     fun deleteData(token: String, id: String, dao: SkincareDao) {
         viewModelScope.launch {
             try {
+                status.value = ApiStatus.LOADING
                 val authHeader = getAuthHeader(token)
                 val result = withContext(Dispatchers.IO) {
                     SkincareApi.service.deleteSkincare(authHeader, id)
@@ -240,7 +242,7 @@ class MainViewModel : ViewModel() {
                 }
                 retrieveData(token, dao)
             } catch (e: Exception) {
-                errorMessage.value = "Item deleted"
+                errorMessage.value = "Delete failed: check your connection"
                 retrieveData(token, dao)
             }
         }
@@ -249,7 +251,7 @@ class MainViewModel : ViewModel() {
     fun putData(token: String, id: String, nama: String, brand: String, bitmap: Bitmap?, dao: SkincareDao) {
         viewModelScope.launch {
             try {
-                status.value = ApiStatus.SUCCESS
+                status.value = ApiStatus.LOADING
                 val authHeader = getAuthHeader(token)
 
                 var imagePart: MultipartBody.Part? = null
@@ -296,6 +298,7 @@ class MainViewModel : ViewModel() {
                 retrieveData(token, dao)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Update Result: ${e.message}")
+                errorMessage.value = "Update failed: check your connection"
                 retrieveData(token, dao)
             }
         }
