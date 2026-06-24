@@ -3,7 +3,6 @@ package com.astrid0049.myskin.ui.screen
 import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.astrid0049.myskin.database.SkincareDao
@@ -55,7 +53,6 @@ import com.astrid0049.myskin.ui.theme.MySkinTheme
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
-import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
@@ -240,7 +237,7 @@ fun AddSkincareDialog(
                 ) {
                     Text(if (bitmap == null) "Pick & Crop Photo" else "Change Photo")
                 }
-                
+
                 bitmap?.let {
                     Spacer(modifier = Modifier.height(8.dp))
                     AsyncImage(
@@ -293,8 +290,8 @@ fun EditSkincareDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, String, Bitmap?) -> Unit
 ) {
-    var nama by remember { mutableStateOf(skincare.nama) }
-    var brand by remember { mutableStateOf(skincare.brand) }
+    var nama by remember { mutableStateOf(skincare.nama.replace("\"", "")) }
+    var brand by remember { mutableStateOf(skincare.brand.replace("\"", "")) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     val context = LocalContext.current
 
@@ -361,7 +358,7 @@ fun EditSkincareDialog(
                 ) {
                     Text(if (bitmap == null) "Change Photo (Optional)" else "Photo Selected")
                 }
-                
+
                 if (bitmap != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     AsyncImage(
@@ -432,7 +429,7 @@ fun ScreenContent(
     ) {
         when (apiStatus) {
             ApiStatus.LOADING -> {
-                androidx.compose.material3.CircularProgressIndicator()
+                CircularProgressIndicator()
             }
             ApiStatus.FAILED -> {
                 Column(

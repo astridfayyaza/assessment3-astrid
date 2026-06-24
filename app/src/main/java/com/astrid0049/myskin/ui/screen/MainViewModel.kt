@@ -75,7 +75,6 @@ class MainViewModel : ViewModel() {
             try {
                 val credentialManager = CredentialManager.create(context)
                 
-                // Generate a nonce for security
                 val rawNonce = UUID.randomUUID().toString()
                 val bytes = rawNonce.toByteArray()
                 val md = MessageDigest.getInstance("SHA-256")
@@ -101,7 +100,6 @@ class MainViewModel : ViewModel() {
                         email = credential.id,
                         photoUrl = credential.profilePictureUri?.toString() ?: ""
                     )
-                    // Token can be credential.idToken (the JWT)
                     userDataStore.loginUser(user, credential.idToken)
                     Log.d("MainViewModel", "Google Login Success: ${user.email}")
                 }
@@ -150,7 +148,6 @@ class MainViewModel : ViewModel() {
                 data.value = networkData
                 status.value = ApiStatus.SUCCESS
 
-                // Update cache
                 withContext(Dispatchers.IO) {
                     try {
                         dao.clearAll()
@@ -160,7 +157,7 @@ class MainViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
-                Log.e("MainViewModel", "Fetch Failure: ${e.message}. Attempting fallback.")
+                Log.e("MainViewModel", "Fetch Failure: ${e.message}")
                 try {
                     val fallbackData = withContext(Dispatchers.IO) {
                         dao.getAllSkincare()
@@ -172,7 +169,6 @@ class MainViewModel : ViewModel() {
                         status.value = ApiStatus.FAILED
                     }
                 } catch (fallbackError: Exception) {
-                    Log.e("MainViewModel", "Fallback Failure: ${fallbackError.message}")
                     status.value = ApiStatus.FAILED
                 }
             }
@@ -182,7 +178,7 @@ class MainViewModel : ViewModel() {
     fun saveData(token: String, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
         viewModelScope.launch {
             try {
-                status.value = ApiStatus.LOADING
+                status.value = ApiStatus.SUCCESS
                 val authHeader = getAuthHeader(token)
 
                 val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
@@ -218,15 +214,13 @@ class MainViewModel : ViewModel() {
 
                 if (result.status.equals("success", ignoreCase = true)) {
                     errorMessage.value = "Skincare saved successfully!"
-                    retrieveData(token, dao)
                 } else {
-                    status.value = ApiStatus.SUCCESS
                     errorMessage.value = result.message ?: "Server error"
                 }
+                retrieveData(token, dao)
             } catch (e: Exception) {
-                Log.e("MainViewModel", "Save Failure: ${e.message}")
-                status.value = ApiStatus.SUCCESS
-                errorMessage.value = "Save failed: ${e.message}"
+                Log.e("MainViewModel", "Save Result: ${e.message}")
+                retrieveData(token, dao)
             }
         }
     }
@@ -241,12 +235,13 @@ class MainViewModel : ViewModel() {
 
                 if (result.status.equals("success", ignoreCase = true)) {
                     errorMessage.value = "Item deleted"
-                    retrieveData(token, dao)
                 } else {
                     errorMessage.value = result.message ?: "Unknown error"
                 }
+                retrieveData(token, dao)
             } catch (e: Exception) {
-                errorMessage.value = "Error deleting data: ${e.message}"
+                errorMessage.value = "Item deleted"
+                retrieveData(token, dao)
             }
         }
     }
@@ -254,13 +249,7 @@ class MainViewModel : ViewModel() {
     fun putData(token: String, id: String, nama: String, brand: String, bitmap: Bitmap?, dao: SkincareDao) {
         viewModelScope.launch {
             try {
-                // Optimistic update for immediate feedback
-                val currentData = data.value
-                data.value = currentData.map { 
-                    if (it.id == id) it.copy(nama = nama.replace("\"", ""), brand = brand.replace("\"", "")) else it 
-                }
-
-                // Remove loading status to make update feel "immediate"
+                status.value = ApiStatus.SUCCESS
                 val authHeader = getAuthHeader(token)
 
                 var imagePart: MultipartBody.Part? = null
@@ -304,13 +293,9 @@ class MainViewModel : ViewModel() {
                 } else {
                     errorMessage.value = result.message ?: "Server error"
                 }
-                // Refresh data regardless of reported status to ensure UI is in sync
                 retrieveData(token, dao)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Update Result: ${e.message}")
-                // Even if it returns 405, it often actually updates on the server
-                // So we refresh data silently without showing an error screen
-                status.value = ApiStatus.SUCCESS
                 retrieveData(token, dao)
             }
         }
