@@ -9,5 +9,7 @@ data class Skincare(
     val nama: String,
     val brand: String,
     val imageId: String,
-    val mine: Int
+    val mine: Int,
+    val isSynced: Boolean = true,
+    val localImagePath: String? = null
 )

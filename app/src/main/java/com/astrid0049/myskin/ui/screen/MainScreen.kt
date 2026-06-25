@@ -144,7 +144,7 @@ fun MainScreen(
             AddSkincareDialog(
                 onDismiss = { showAddDialog = false },
                 onConfirm = { nama, brand, bitmap ->
-                    viewModel.postNewData(nama, brand, bitmap, dao)
+                    viewModel.postNewData(context, nama, brand, bitmap, dao)
                     showAddDialog = false
                 }
             )
@@ -588,16 +588,22 @@ fun ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = { if (isLoggedIn) onEdit(skincare) },
-                onLongClick = { if (isLoggedIn) showDeleteConfirm = true }
+                onClick = { if (isLoggedIn && skincare.isSynced) onEdit(skincare) },
+                onLongClick = { if (isLoggedIn && skincare.isSynced) showDeleteConfirm = true }
             ),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(contentAlignment = Alignment.BottomCenter) {
+            val imageData = if (!skincare.isSynced && skincare.localImagePath != null) {
+                java.io.File(skincare.localImagePath)
+            } else {
+                SkincareApi.getSkincareUrl(skincare.imageId)
+            }
+
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(SkincareApi.getSkincareUrl(skincare.imageId))
+                    .data(imageData)
                     .crossfade(true)
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .memoryCachePolicy(CachePolicy.ENABLED)
@@ -644,12 +650,18 @@ fun ListItem(
                         maxLines = 1
                     )
                 }
-                if (isLoggedIn) {
+                if (isLoggedIn && skincare.isSynced) {
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit",
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
+                    )
+                } else if (!skincare.isSynced) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
                     )
                 }
             }

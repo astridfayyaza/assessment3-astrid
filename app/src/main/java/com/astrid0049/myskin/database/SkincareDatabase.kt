@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.astrid0049.myskin.model.Skincare
 
-@Database(entities = [Skincare::class], version = 1, exportSchema = false)
+@Database(entities = [Skincare::class], version = 2, exportSchema = false)
 abstract class SkincareDatabase : RoomDatabase() {
     abstract fun skincareDao(): SkincareDao
 
@@ -20,7 +20,9 @@ abstract class SkincareDatabase : RoomDatabase() {
                     context.applicationContext,
                     SkincareDatabase::class.java,
                     "skincare_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

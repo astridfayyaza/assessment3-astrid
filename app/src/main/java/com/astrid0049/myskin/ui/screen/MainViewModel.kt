@@ -9,11 +9,17 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.astrid0049.myskin.database.SkincareDao
 import com.astrid0049.myskin.model.Skincare
 import com.astrid0049.myskin.model.User
 import com.astrid0049.myskin.network.ApiStatus
+import com.astrid0049.myskin.network.ImageStorage
 import com.astrid0049.myskin.network.SkincareApi
+import com.astrid0049.myskin.network.SyncWorker
 import com.astrid0049.myskin.network.UserDataStore
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -123,8 +129,8 @@ class MainViewModel : ViewModel() {
         retrieveData(currentToken, dao)
     }
 
-    fun postNewData(nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
-        saveData(currentToken, nama, brand, bitmap, dao)
+    fun postNewData(context: Context, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
+        saveData(context, currentToken, nama, brand, bitmap, dao)
     }
 
     fun updateExistingData(id: String, nama: String, brand: String, bitmap: Bitmap?, dao: SkincareDao) {
@@ -144,13 +150,15 @@ class MainViewModel : ViewModel() {
                     SkincareApi.service.getSkincare(authHeader)
                 }
 
-                Log.d("MainViewModel", "Fetch Success: received ${networkData.size} items")
-                data.value = networkData
+                // Get unsynced local data to merge
+                val unsyncedLocal = withContext(Dispatchers.IO) { dao.getUnsyncedSkincare() }
+                
+                data.value = unsyncedLocal + networkData
                 status.value = ApiStatus.SUCCESS
 
                 withContext(Dispatchers.IO) {
                     try {
-                        dao.clearAll()
+                        dao.clearSynced()
                         dao.insertAll(networkData)
                     } catch (e: Exception) {
                         Log.e("MainViewModel", "Failed to update Room cache: ${e.message}")
@@ -175,12 +183,46 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun saveData(token: String, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
+    fun saveData(context: Context, token: String, nama: String, brand: String, bitmap: Bitmap, dao: SkincareDao) {
         viewModelScope.launch {
             try {
                 status.value = ApiStatus.LOADING
-                val authHeader = getAuthHeader(token)
+                
+                // 1. Save locally first
+                val tempId = "local_" + UUID.randomUUID().toString()
+                val fileName = "$tempId.jpg"
+                val localPath = withContext(Dispatchers.IO) {
+                    ImageStorage.saveToInternalStorage(context, bitmap, fileName)
+                }
 
+                if (localPath != null) {
+                    val localItem = Skincare(
+                        id = tempId,
+                        nama = nama,
+                        brand = brand,
+                        imageId = "",
+                        mine = 1,
+                        isSynced = false,
+                        localImagePath = localPath
+                    )
+                    withContext(Dispatchers.IO) { dao.insert(localItem) }
+                    
+                    // Show updated data with local item immediately
+                    retrieveData(token, dao)
+
+                    // 2. Trigger Sync Worker
+                    val constraints = Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                    val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+                        .setConstraints(constraints)
+                        .build()
+                    WorkManager.getInstance(context).enqueue(syncRequest)
+                    
+                    errorMessage.value = "Saved locally. Syncing..."
+                }
+
+                val authHeader = getAuthHeader(token)
                 val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
                     bitmap.copy(Bitmap.Config.ARGB_8888, false)
                 } else {
@@ -214,13 +256,17 @@ class MainViewModel : ViewModel() {
 
                 if (result.status.equals("success", ignoreCase = true)) {
                     errorMessage.value = "Skincare saved successfully!"
+                    // Delete local temp item if online save succeeded
+                    withContext(Dispatchers.IO) {
+                        dao.deleteById(tempId)
+                        ImageStorage.deleteFile(localPath!!)
+                    }
                 } else {
                     errorMessage.value = result.message ?: "Server error"
                 }
                 retrieveData(token, dao)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Save Result: ${e.message}")
-                errorMessage.value = "Save failed: check your connection"
                 retrieveData(token, dao)
             }
         }
