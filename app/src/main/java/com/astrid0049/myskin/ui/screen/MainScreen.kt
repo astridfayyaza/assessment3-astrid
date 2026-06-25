@@ -45,6 +45,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.astrid0049.myskin.database.SkincareDao
 import com.astrid0049.myskin.model.Skincare
@@ -243,8 +245,16 @@ fun AddSkincareDialog(
 
                 bitmap?.let {
                     Spacer(modifier = Modifier.height(8.dp))
-                    AsyncImage(
-                        model = it,
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(it)
+                            .crossfade(true)
+                            .build(),
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
                         contentDescription = "Selected Image",
                         modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
                     )
@@ -364,15 +374,33 @@ fun EditSkincareDialog(
 
                 if (bitmap != null) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    AsyncImage(
-                        model = bitmap,
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(bitmap)
+                            .crossfade(true)
+                            .build(),
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
                         contentDescription = "New Image",
                         modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
                     )
                 } else {
                     Spacer(modifier = Modifier.height(8.dp))
-                    AsyncImage(
-                        model = SkincareApi.getSkincareUrl(skincare.imageId),
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(SkincareApi.getSkincareUrl(skincare.imageId))
+                            .crossfade(true)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .build(),
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
                         contentDescription = "Current Image",
                         modifier = Modifier.size(100.dp).align(Alignment.CenterHorizontally)
                     )
@@ -567,11 +595,26 @@ fun ListItem(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(contentAlignment = Alignment.BottomCenter) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(SkincareApi.getSkincareUrl(skincare.imageId))
                     .crossfade(true)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
                     .build(),
+                loading = {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    }
+                },
+                error = {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Error loading image",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(48.dp)
+                    )
+                },
                 contentDescription = skincare.nama,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
