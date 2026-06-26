@@ -209,17 +209,8 @@ class MainViewModel : ViewModel() {
                     
                     // Show updated data with local item immediately
                     retrieveData(token, dao)
-
-                    // 2. Trigger Sync Worker
-                    val constraints = Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                    val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-                        .setConstraints(constraints)
-                        .build()
-                    WorkManager.getInstance(context).enqueue(syncRequest)
                     
-                    errorMessage.value = "Saved locally. Syncing..."
+                    errorMessage.value = "Saving..."
                 }
 
                 val authHeader = getAuthHeader(token)
@@ -259,14 +250,32 @@ class MainViewModel : ViewModel() {
                     // Delete local temp item if online save succeeded
                     withContext(Dispatchers.IO) {
                         dao.deleteById(tempId)
-                        ImageStorage.deleteFile(localPath!!)
+                        localPath?.let { ImageStorage.deleteFile(it) }
                     }
                 } else {
                     errorMessage.value = result.message ?: "Server error"
+                    // If server error, could be connectivity during upload, trigger sync worker
+                    val constraints = Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                    val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+                        .setConstraints(constraints)
+                        .build()
+                    WorkManager.getInstance(context).enqueue(syncRequest)
                 }
                 retrieveData(token, dao)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Save Result: ${e.message}")
+                // Network error - trigger sync worker to upload later
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+                val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+                    .setConstraints(constraints)
+                    .build()
+                WorkManager.getInstance(context).enqueue(syncRequest)
+                
+                errorMessage.value = "Connection failed. Will sync when online."
                 retrieveData(token, dao)
             }
         }
